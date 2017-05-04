@@ -58,7 +58,7 @@ class GenerationDistribution:
 class Generator(object):
 
     def __init__(self,X,hidden_size):
-        self.w,self.b = norm_weights(X.shape[1], hidden_size)
+        self.w,self.b = norm_weights(X.get_value(borrow=True, return_internal_type=True).shape[0], hidden_size)
         self.X = X
         self.hidden_size = 2
 
@@ -74,22 +74,121 @@ def generator(X,w,b):
 
 class Discriminator(object):
 
-    def __init__(self,X,hidden_size):
-        self.w,self.b = norm_weights(X.shape[1], hidden_size)
+    '''
+        if minibatch_layer:
+            h2 = minibatch(h1)
+            print("Minibatch h2 shape : ",h2.get_shape())
+        else:
+            h2 = tf.tanh(linear(h1, h_dim * 2, scope='d2'))
+            print("Normal h2 shape : ", h2.get_shape())
+
+        h3 = tf.sigmoid(linear(h2, 1, scope='d3'))
+        print("output shape ", h3.get_shape())
+    '''
+
+    def __init__(self,X, n_in, n_hidden, n_out,minibatches=False):
+
         self.X = X
-        self.hidden_size = 2
+        self.n_hidden = n_hidden
+        self.n_in = n_in
+        self.n_out = n_out
+        self.minibatches = minibatches
+        self.h = []
+        self.get_disc_rnn_weights()
+
+    def get_disc_rnn_weights(self):
+        # recurrent weights as a shared variable
+        W_init = np.asarray(np.random.uniform(size=(self.n_hidden, self.n_hidden),
+                                              low=-.01, high=.01),
+                            dtype=theano.config.floatX)
+        self.W = theano.shared(value=W_init, name='W')
+        # input to hidden layer weights
+        W_in_init = np.asarray(np.random.uniform(size=(self.n_in, self.n_hidden),
+                                                 low=-.01, high=.01),
+                               dtype=theano.config.floatX)
+        self.W_in = theano.shared(value=W_in_init, name='W_in')
+
+        # hidden to output layer weights
+        W_out_init = np.asarray(np.random.uniform(size=(self.n_hidden, self.n_out),
+                                                  low=-.01, high=.01),
+                                dtype=theano.config.floatX)
+        self.W_out = theano.shared(value=W_out_init, name='W_out')
+
+        h0_init = np.zeros((self.n_hidden,), dtype=theano.config.floatX)
+        self.h0 = theano.shared(value=h0_init, name='h0')
+
+        bh_init = np.zeros((self.n_hidden,), dtype=theano.config.floatX)
+        self.bh = theano.shared(value=bh_init, name='bh')
+
+        by_init = np.zeros((self.n_out,), dtype=theano.config.floatX)
+        self.by = theano.shared(value=by_init, name='by')
+
+        self.params = [self.W, self.W_in, self.W_out, self.h0,
+                       self.bh, self.by]
+
+    def get_weights(self):
+
+        # W = scale * np.random.randn(nin, nout)
+        w1,b1 = norm_weights(self.n_hidden*2,self.X.get_value(borrow=True, return_internal_type=True).shape[1])
+        w2, b2 = norm_weights(self.n_hidden*2,self.n_hidden*2)
+        w3, b3 = norm_weights(1,self.n_hidden*2)
+        self.w = {'w_in':w1,'w_h':w2, 'w_out':w3}
+        self.b = {'b1':b1, 'b2':b2, 'b3': b3}
+
+        return [self.w, self.b]
 
     def discriminator(self):
-        inc = 0
-        h = []
-        for i in range(self.hidden_size):
+
+        for i in range(self.n_hidden):
+
             if i==0:
-                h[i] = T.nnet.softplus(T.dot(self.X, self.w[i]) + self.b[i], name='h' + str(i))
+                g_z = T.dot(self.X,self.w[i])
+                self.h[i] = T.nnet.softplus(g_z)
+            elif i==2 and self.minibatches:
+                self.h[i] = T.nnet.softplus(minibatch(self.n_hidden))
+            elif i < self.n_hidden:
+                self.h[i] = T.nnet.softplus(T.dot(self.h[i], self.w[i]) + self.b[i])
             else:
-                h[i] = T.nnet.softplus(T.dot(self.h[i], self.w[i]) + self.b[i], name='h' + str(i))
-            inc += 1
-        h[inc] = T.nnet.relu(h[inc], 0)
+                self.h[i] = T.nnet.relu(self.h[i], 0)
+
         return [self.h, self.w, self.b]
+
+    def rnn_discriminator(self):
+        self.updates = {}
+        for param in self.params:
+            init = np.zeros(param.get_value(borrow=True).shape,
+                            dtype=theano.config.floatX)
+            self.updates[param] = theano.shared(init)
+
+        # recurrent function (using tanh activation function) and linear output
+        # activation function
+        def step(x_t, h_tm1):
+            h_t = T.nnet.softplus(T.dot(x_t, self.W_in) + \
+                                  T.dot(h_tm1, self.W) + self.bh)
+            y_t = T.dot(h_t, self.W_out) + self.by
+            return h_t, y_t
+
+        # the hidden state `h` for the entire sequence, and the output for the
+        # entire sequence `y` (first dimension is always time)
+        [self.h, self.y_pred], _ = theano.scan(step,
+                                               sequences=self.X,
+                                               outputs_info=[self.h0, None])
+        return (self.h,self.y_pred)
+
+    def updater(self, loss, params, input, learning_rate=0.01):
+        decay = 0.95
+        num_decay_steps = 150
+        batch = theano.shared(0)
+
+        dW = T.grad(loss, params['W'])
+        dW_in = T.grad(loss, params['W_in'])
+        dW_out = T.grad(loss, params['W_out'])
+
+        gradients = theano.function(inputs=input, outputs=loss, updates=
+        OrderedDict([(params['W'], params['W'] - learning_rate * dW),
+                     (params['W_in'], params['W_in'] - learning_rate * dW_in),
+                     (params['W_out'], params['W_out'] - learning_rate * dW_out)]), on_unused_input='ignore')
+        return gradients
 
     '''
     def discriminator(input, hidden_size, minibatch_layer=True):
@@ -144,6 +243,31 @@ for i in range(self.mlp_hidden_size):
 self.W = W_disc
 self.b = b_disc
 '''
+
+def get_synthetic(n_hidden=10,n_in=5, n_out=2,n_steps=10, n_seq=100):
+    '''
+    Test RNN with real-valued outputs.
+    n_hidden = 10
+    n_in = 5
+    n_out = 2
+    # number of recurrent steps
+    n_steps = 10
+    # number of training sentences
+    n_seq = 100
+    '''
+
+    np.random.seed(0)
+    # simple lag test
+    seq = np.random.randn(n_seq, n_steps, n_in)
+    targets = np.zeros((n_seq, n_steps, n_out))
+
+    targets[:, 1:, 0] = seq[:, :-1, 3]  # delayed 1
+    targets[:, 1:, 1] = seq[:, :-1, 2]  # delayed 1
+    targets[:, 2:, 2] = seq[:, :-2, 0]  # delayed 2
+
+    targets += 0.01 * np.random.standard_normal(targets.shape)
+
+    return(seq,targets)
 
 def norm_weights(fan_out,fan_in=None,layer_num=1,name='',bias=True,std=1.0):
 
@@ -206,14 +330,14 @@ def discriminator(input, h_dim, minibatch_layer=True):
     return h3
 
 def get_inputs():
-    u = T.dmatrix()
+    u = T.imatrix('u')
     # target (where first dimension is time)
-    t = T.dmatrix()
+    t = T.imatrix('t')
     # initial hidden state of the RNN
-    h0 = T.vector()
+    h0 = T.ivector('h0')
     # learning rate
-    lr = T.scalar()
-    return [u,t,h0,lr]
+    lr = T.scalar('lr')
+    return [h0, u, t, lr]
 
 def sgd(lr, tparams, x, mask, y, cost):
     """ Stochastic Gradient Descent
@@ -267,39 +391,32 @@ def optimizer(loss, params,input,learning_rate=0.01):
     batch = theano.shared(0)
     # uncomment this when fixed !
     # compute gradient of loss with respect to params
-    d_loss_wrt_params = T.grad(loss, params.values())
-    # compile the MSGD step into a theano function
 
+    dW = T.grad(loss, params['W'])
+    dW_in = T.grad(loss, params['W_in'])
+    dW_out = T.grad(loss, params['W_out'])
+
+    #d_loss_wrt_params = T.grad(loss, [params['W'],params['W_in'],params['W_out']])
+    # compile the MSGD step into a theano function
 
     # ValueError: The updates parameter must be an OrderedDict/dict or a list of lists/tuples with 2 elements
     # consider using the sgd function as I'm struggling to resolve why I cannot get gradient descent working
     #  here :/ e.g def sgd(lr, tparams, grads, x, mask, y, cost)
 
-    updates = updates={params['W']: params['W'] - learning_rate * d_loss_wrt_params[0],
-                       params['W_in']: params['W_in'] - learning_rate * d_loss_wrt_params[1],
-                       params['W_out']: params['W_out'] - learning_rate * d_loss_wrt_params[2]}
-
-    debug_variables(loss,input,d_loss_wrt_params,updates)
-
     # Problem here is that the input should contain all the lstm connections:
     # [h0, u, t, lr]  = previous h0 hidden connection, u input connection, time t and learning rate lr
+    #print (input)
 
-    gradients = theano.function([input],loss, updates=updates)
-
+    gradients = theano.function(inputs=input,outputs=loss, updates=
+                        OrderedDict([(params['W'], params['W'] - learning_rate * dW),
+                         (params['W_in'], params['W_in'] - learning_rate * dW_in),
+                         (params['W_out'], params['W_out'] - learning_rate * dW_out)]),on_unused_input='ignore')
 
     '''
-    error = ((y - t) ** 2).sum()
-    gW, gW_in, gW_out = T.grad(error, [W, W_in, W_out])
-    # training function, that computes the error and updates the weights using
-    # SGD.
-    gradients = theano.function(input, loss, updates=updates)
-
-    fn = theano.function([h0, u, t, lr],
-                         error,
-                         updates={W: W - lr * gW,
-                                  W_in: W_in - lr * gW_in,
-                                  W_out: W_out - lr * gW_out})
+    train_model = theano.function(inputs=[index, l_r, mom],outputs=cost,updates=updates,
+        givens={self.x: train_set_x[index],self.y: train_set_y[index]},mode=mode)
     '''
+
     return gradients
 
 def minibatch(input, num_kernels=5, kernel_dim=3):
@@ -321,8 +438,8 @@ def step(u_t, h_tm1, W, W_in, W_out):
     return h_t, y_t
 
 class GAN:
-    def __init__(self,data,gen,num_steps,batch_size,
-                 log_every,mlp_hidden_size,anim_path):
+    def __init__(self,data,gen,num_steps,batch_size,minibatch,
+                 log_every,anim_path,mlp_hidden_size=4):
 
         self.data = data
         self.gen = gen
@@ -330,7 +447,7 @@ class GAN:
         self.batch_size = batch_size
         self.minibatch = minibatch
         self.log_every = log_every
-        self.mlp_hidden_size = 4
+        self.mlp_hidden_size = mlp_hidden_size
         self.anim_path = anim_path
         self.anim_frames = []
         self.h = OrderedDict()
@@ -353,11 +470,17 @@ class GAN:
 
     def _rnn_weights(self,n,nin,nout):
         disc_weights = OrderedDict()
-        disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype('float32'),borrow=True)
+        disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
+        disc_weights['b'] = theano.shared(np.ones((n, 1)).astype(theano.config.floatX),borrow=True)
+
         # input to hidden layer weights
-        disc_weights['W_in'] = theano.shared(np.random.uniform(size=(nin, n), low=-.01, high=.01).astype('float32'),borrow=True)
+        disc_weights['W_in'] = theano.shared(np.random.uniform(size=(nin, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
+        disc_weights['b_in'] = theano.shared(np.ones((nin, 1)).astype(theano.config.floatX),borrow=True)
+
         # hidden to output layer weights
-        disc_weights['W_out'] = theano.shared(np.random.uniform(size=(n, nout), low=-.01, high=.01).astype('float32'),borrow=True)
+        disc_weights['W_out'] = theano.shared(np.random.uniform(size=(n, nout), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
+        disc_weights['b_out'] = theano.shared(np.ones((nout, 1)).astype(theano.config.floatX),borrow=True)
+
         return disc_weights
 
     def _create_model(self):
@@ -384,7 +507,10 @@ class GAN:
         )
 
         # n = 12, nin = 2*4 = 8, nout = 1
+        # seq = np.random.randn(n_seq, n_steps, n_in)
+
         D_pre_inputs = get_inputs()
+
         D_pre_weights = self._rnn_weights(self.pre_input.get_value().shape[0], 2*self.mlp_hidden_size, 1)
 
 
@@ -398,8 +524,9 @@ class GAN:
 
         #D_pre = discriminator(self.pre_input.get_value(), self.mlp_hidden_size, self.minibatch)
 
-        # pre lose here is the mean squared error. This makes sense since we are trying to regenerate the
-        # continuous word embeddings themselves
+        # 'pre loss' is the mean squared error. This makes sense since we are trying to regenerate the
+        # continuous word embeddings themselves. In contrast, if the task was to generate discrete variables
+        # we would use negative log likelihood i.e categorical cross entropy
 
         self.pre_loss = T.mean(T.sqr(d_y_pre - self.pre_labels))
 
@@ -408,19 +535,12 @@ class GAN:
         # self.pre_loss = -T.mean(T.log(d_y_pre)+T.log(1-d_y_pre))
 
         # (loss, params,input,learning_rate=0.01)
-        # Problem here could be I should be passing D_pre_weights instead of D_pre_weights.values()
+        # Problem here is that D_pre_inputs are not passing actual values just placeholders
+
+        # <theano.compile.function_module.Function object at 0x0000000102877F60>
         self.pre_opt = optimizer(self.pre_loss, D_pre_weights, D_pre_inputs, self.learning_rate)
-        # OR
+        #OR
         #self.pre_opt = sgd(self.learning_rate, D_pre_weights,D_pre_inputs, self.minibatch, d_y_pre, self.pre_loss)
-
-
-        '''
-        # This defines the generator network - it takes samples from a noise
-        # distribution as input, and passes them through an MLP.
-        with tf.variable_scope('Gen'):
-            self.z = tf.placeholder(tf.float32, shape=(self.batch_size, 1))
-            self.G = generator(self.z, self.mlp_hidden_size)
-        '''
 
         self.z = theano.shared(
             value=norm_weight(self.batch_size, 1,).astype(theano.config.floatX),
@@ -428,22 +548,49 @@ class GAN:
             borrow=True
         )
 
-        self.g = T.matrix(self.z, self.mlp_hidden_size) #  shape=(self.batch_size, 1)
+        #self.z = tf.placeholder(tf.float32, shape=(self.batch_size, 1))
+        #self.G = generator(self.z, self.mlp_hidden_size)
+        # def generator(input, h_dim):
+        # h0 = tf.nn.softplus(linear(input, h_dim, 'g0'))
+        #h1 = linear(h0, 1, 'g1')
+
+        self.g = T.matrix() #  shape=(self.batch_size, 1) self.z, self.mlp_hidden_size
+        gen = Generator(self.z,self.mlp_hidden_size*2)
+        self.G = gen.generator()
 
         # pretraining the discrimintor
-        self.x = norm_weight(self.batch_size, 1,).astype(theano.config.floatX)
-        self.D1  = discriminator(self.x, self.mlp_hidden_size, self.minibatch)
-        self.D2 = discriminator(self.G, self.mlp_hidden_size, self.minibatch)
+        self.x = theano.shared(
+            value=norm_weight(self.batch_size, 1,).astype(theano.config.floatX),
+            name='x',
+            borrow=True
+        )
+
+         # n_in, n_hidden, n_out
+        print(self.x.get_value().shape)
+        d1_discrim = Discriminator(X=self.x,n_in= self.x.get_value().shape[0],
+                                   n_hidden = self.mlp_hidden_size,n_out=1, minibatches=self.minibatch)
+        _,self.D1 = d1_discrim.rnn_discriminator()
+        #self.D1  = discriminator(self.x, self.mlp_hidden_size, self.minibatch)
+
+
+
+        # d2_discrim = Discriminator(self.x, self.mlp_hidden_size, self.minibatch)
+        # d2_discrim.discriminator()
+        d2_discrim = Discriminator(X=self.G,n_in= self.x.get_value().shape[0],
+                                   n_hidden = self.mlp_hidden_size,n_out=1, minibatches=self.minibatch)
+        _,self.D2 = d2_discrim.rnn_discriminator()
 
         self.loss_d = disciminator_loss(self.D1,self.D2)
+        print("Discriminator loss  : ", self.loss_d)
         self.loss_g = -T.log(self.D2)
 
-        self.d_pre_params = norm_weights()
-        self.d_params = norm_weights()
-        self.g_params = norm_weights()
-
-        self.opt_d = norm_weights(self.loss_d, self.d_params, self.learning_rate)
-        self.opt_g = norm_weights(self.loss_d, self.d_params, self.learning_rate)
+        self.d_pre_params = d_y_pre
+        # Not sure what the equivalent is to get trainable variables for all scope including D1 and D2
+        self.d_params = self.D1
+        self.g_params = self.G
+        
+        #self.opt_d = optimizer(self.loss_d, self.d_params,self.x.get_value(), self.learning_rate)
+        #self.opt_g = optimizer(self.loss_g, self.g_params,self.x.get_value(), self.learning_rate)
 
 
     def update_discrim(self):
@@ -610,7 +757,7 @@ def parse_args():
                         help='use minibatch discrimination')
     parser.add_argument('--log-every', type=int, default=10,
                         help='print loss after this many steps')
-    parser.add_argument('--anim', type=str, default=None,
+    parser.add_argument('--anim', type=str, default='animation',
                         help='name of the output animation file (default: none)')
     return parser.parse_args()
 
