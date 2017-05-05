@@ -41,6 +41,10 @@ self.by = theano.shared(value=by_init, name='by')
 
 #### Discriminator weights (6)
 
+* n = batch_size = 12
+* n_in = 2 * mlp hidden size = 8
+* nout = 1
+
 def _rnn_weights(self,n,nin,nout):
     disc_weights = OrderedDict()
     disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
@@ -54,7 +58,7 @@ def _rnn_weights(self,n,nin,nout):
     disc_weights['W_out'] = theano.shared(np.random.uniform(size=(n, nout), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
     disc_weights['b_out'] = theano.shared(np.ones((nout, 1)).astype(theano.config.floatX),borrow=True)
 
-**self.params = {'W' : (4,4), 'W_in' : (12,4), 'W_out' : (4,1), 'h0' : (4,), 'bh' : (4,), 'by' : (1,)}**
+**self.params = {'W' : (12,12), 'b' : (12,1), 'W_in' : (8,12), 'b_in' : (12,1), 'W_out' : (12,1), 'b_out' : (1,1)}**
 
 
 ### 2. Animation of the generated distribution
