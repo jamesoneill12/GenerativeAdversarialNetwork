@@ -59,7 +59,7 @@ self.by = theano.shared(value=by_init, name='by')
 * nout = 1
 
 <pre><code>
-\# def _rnn_weights(self,n,nin,nout):
+\# def _rnn_weights(self,n_in,n,nout):
     disc_weights = OrderedDict()
     disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
     disc_weights['b'] = theano.shared(np.ones((n, 1)).astype(theano.config.floatX),borrow=True)
@@ -82,9 +82,9 @@ Function output shapes
 * (12,1)
 Weights shapes in each layer
 * w (8,8) ,b (8,)
-* w (8,15) ,b (15,)
+* w (8,12) ,b (12,)
 * w (13,) ,b (1,)
-* w (1,8) ,b (8,)**
+* w (12,1) ,b (1,)
 
 ## Generator weights (6)
 
