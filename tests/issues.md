@@ -17,27 +17,38 @@ X, n_in, n_hidden, n_out are main dimensions for designing weights.
 * n_out = 1
 
 \# recurrent weights as a shared variable
-W_init = **(4,4)**
+W_init = (4,4)
 self.W = theano.shared(value=W_init, name='W')
 
 \# input to hidden layer weights
-W_in_init = **(12,4)**
+W_in_init = (12,4)
 self.W_in = theano.shared(value=W_in_init, name='W_in')
 
 \# hidden to output layer weights
-W_out_init = **(4,1)**
+W_out_init = (4,1)
 self.W_out = theano.shared(value=W_out_init, name='W_out')
 
-h0_init = **(4,)** of zeros
+h0_init = (4,) of zeros
 self.h0 = theano.shared(value=h0_init, name='h0')
 
-bh_init = **(4,)** of zeros
+bh_init = (4,) of zeros
 self.bh = theano.shared(value=bh_init, name='bh')
 
-by_init = **(1,)** of zeros
+by_init = (1,) of zeros
 self.by = theano.shared(value=by_init, name='by')
 
 **self.params = {'W' : (4,4), 'W_in' : (12,4), 'W_out' : (4,1), 'h0' : (4,), 'bh' : (4,), 'by' : (1,)}**
+
+** Function output shapes
+(12,8)
+(12,8)
+(12,13)
+(12,1)
+weights shapes in each layer
+w (8,8) ,b (8,)
+w (8,15) ,b (15,)
+w (13,) ,b (1,)
+w (1,4) ,b (4,)**
 
 #### Discriminator weights (6)
 
@@ -60,6 +71,40 @@ def _rnn_weights(self,n,nin,nout):
 
 **self.params = {'W' : (12,12), 'b' : (12,1), 'W_in' : (8,12), 'b_in' : (12,1), 'W_out' : (12,1), 'b_out' : (1,1)}**
 
+** Function output shapes
+(12,8)
+(12,8)
+(12,13)
+(12,1)
+weights shapes in each layer
+w (8,8) ,b (8,)
+w (8,15) ,b (15,)
+w (13,) ,b (1,)
+w (1,8) ,b (8,)**
+
+#### Generator weights (6)
+
+** Function output shapes
+(12,8)
+(12,8)
+(12,13)
+(12,1)
+weights shapes in each layer
+w (8,8) ,b (8,)
+w (8,15) ,b (15,)
+w (13,) ,b (1,)
+w (1,8) ,b (8,)**
+
+Input shape :  (12, 8)
+w shape :  (8, 8)
+b shape :  (8,)
+Hidden 1 shape :  (12, 8)
+w shape :  (8, 15)
+b shape :  (15,)
+Minibatch h2 shape :  (12, 13)
+w shape :  (13, 1)
+b shape :  (1,)
+output shape  (12, 1)
 
 ### 2. Animation of the generated distribution
 
