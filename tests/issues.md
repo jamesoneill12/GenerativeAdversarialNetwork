@@ -39,16 +39,16 @@ self.by = theano.shared(value=by_init, name='by')
 
 **self.params = {'W' : (4,4), 'W_in' : (12,4), 'W_out' : (4,1), 'h0' : (4,), 'bh' : (4,), 'by' : (1,)}**
 
-** Function output shapes
-(12,8)
-(12,8)
-(12,13)
-(12,1)
-weights shapes in each layer
-w (8,8) ,b (8,)
-w (8,15) ,b (15,)
-w (13,) ,b (1,)
-w (1,4) ,b (4,)**
+Function output shapes
+* (12,8)
+* (12,8)
+* (12,13)
+* (12,1)
+Weights shapes in each layer
+* w (8,8) ,b (8,)
+* w (8,15) ,b (15,)
+* w (13,) ,b (1,)
+* w (1,4) ,b (4,)
 
 #### Discriminator weights (6)
 
@@ -71,40 +71,29 @@ def _rnn_weights(self,n,nin,nout):
 
 **self.params = {'W' : (12,12), 'b' : (12,1), 'W_in' : (8,12), 'b_in' : (12,1), 'W_out' : (12,1), 'b_out' : (1,1)}**
 
-** Function output shapes
-(12,8)
-(12,8)
-(12,13)
-(12,1)
-weights shapes in each layer
-w (8,8) ,b (8,)
-w (8,15) ,b (15,)
-w (13,) ,b (1,)
-w (1,8) ,b (8,)**
+Function output shapes
+* (12,8)
+* (12,8)
+* (12,13)
+* (12,1)
+Weights shapes in each layer
+* w (8,8) ,b (8,)
+* w (8,15) ,b (15,)
+* w (13,) ,b (1,)
+* w (1,8) ,b (8,)**
 
 #### Generator weights (6)
 
-** Function output shapes
-(12,8)
-(12,8)
-(12,13)
-(12,1)
-weights shapes in each layer
-w (8,8) ,b (8,)
-w (8,15) ,b (15,)
-w (13,) ,b (1,)
-w (1,8) ,b (8,)**
-
-Input shape :  (12, 8)
-w shape :  (8, 8)
-b shape :  (8,)
-Hidden 1 shape :  (12, 8)
-w shape :  (8, 15)
-b shape :  (15,)
-Minibatch h2 shape :  (12, 13)
-w shape :  (13, 1)
-b shape :  (1,)
-output shape  (12, 1)
+Function output shapes
+*(12,8)
+* (12,8)
+* (12,13)
+* (12,1)
+Weights shapes in each layer
+* w (8,8) ,b (8,)
+* w (8,15) ,b (15,)
+* w (13,) ,b (1,)
+* w (1,8) ,b (8,)**
 
 ### 2. Animation of the generated distribution
 
