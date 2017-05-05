@@ -8,7 +8,7 @@ Otherwise there is a mismatch and it will not work.
 Therefore, the LSTM architecture used for the pretrained discriminator should also be applied for the main one. At the moment they
 are both different as the main discriminator is a simple feedforward network.
 
-#### Pretrained discriminator weights (6) 
+## Pretrained discriminator weights (8) 
 
 X, n_in, n_hidden, n_out are main dimensions for designing weights. 
 * X = (12,1) batch size default arg is (12,1)
@@ -39,18 +39,18 @@ self.by = theano.shared(value=by_init, name='by')
 
 **self.params = {'W' : (4,4), 'W_in' : (12,4), 'W_out' : (4,1), 'h0' : (4,), 'bh' : (4,), 'by' : (1,)}**
 
-Function output shapes
+## Function output shapes
 * (12,8)
 * (12,8)
 * (12,13)
 * (12,1)
-Weights shapes in each layer
+## Weights shapes in each layer
 * w (8,8) ,b (8,)
 * w (8,15) ,b (15,)
 * w (13,) ,b (1,)
 * w (1,4) ,b (4,)
 
-#### Discriminator weights (6)
+## Discriminator weights (8)
 
 * n = batch_size = 12
 * n_in = 2 * mlp hidden size = 8
@@ -82,7 +82,7 @@ Weights shapes in each layer
 * w (13,) ,b (1,)
 * w (1,8) ,b (8,)**
 
-#### Generator weights (6)
+## Generator weights (6)
 
 Function output shapes
 *(12,8)
