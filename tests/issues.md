@@ -17,6 +17,7 @@ X, n_in, n_hidden, n_out are main dimensions for designing weights.
 * n_out = 1
 
 \# recurrent weights as a shared variable
+<pre><code>
 W_init = (4,4)
 self.W = theano.shared(value=W_init, name='W')
 
@@ -36,6 +37,7 @@ self.bh = theano.shared(value=bh_init, name='bh')
 
 by_init = (1,) of zeros
 self.by = theano.shared(value=by_init, name='by')
+</code></pre>
 
 **self.params = {'W' : (4,4), 'W_in' : (12,4), 'W_out' : (4,1), 'h0' : (4,), 'bh' : (4,), 'by' : (1,)}**
 
@@ -56,6 +58,7 @@ self.by = theano.shared(value=by_init, name='by')
 * n_in = 2 * mlp hidden size = 8
 * nout = 1
 
+<pre><code>
 \# def _rnn_weights(self,n,nin,nout):
     disc_weights = OrderedDict()
     disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
@@ -68,6 +71,7 @@ self.by = theano.shared(value=by_init, name='by')
     \# hidden to output layer weights
     disc_weights['W_out'] = theano.shared(np.random.uniform(size=(n, nout), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
     disc_weights['b_out'] = theano.shared(np.ones((nout, 1)).astype(theano.config.floatX),borrow=True)
+</code></pre>
 
 **self.params = {'W' : (12,12), 'b' : (12,1), 'W_in' : (8,12), 'b_in' : (12,1), 'W_out' : (12,1), 'b_out' : (1,1)}**
 
