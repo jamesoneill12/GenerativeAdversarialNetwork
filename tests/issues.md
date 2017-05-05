@@ -56,7 +56,7 @@ self.by = theano.shared(value=by_init, name='by')
 * n_in = 2 * mlp hidden size = 8
 * nout = 1
 
-def _rnn_weights(self,n,nin,nout):
+\# def _rnn_weights(self,n,nin,nout):
     disc_weights = OrderedDict()
     disc_weights['W'] = theano.shared(np.random.uniform(size=(n, n), low=-.01, high=.01).astype(theano.config.floatX),borrow=True)
     disc_weights['b'] = theano.shared(np.ones((n, 1)).astype(theano.config.floatX),borrow=True)
